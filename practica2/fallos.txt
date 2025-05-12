@@ -1,35 +1,40 @@
-oot@osboxes:/home/osboxes/asop/aso/practica2# make
+root@osboxes:/home/osboxes/asop/aso/practica2# make clean
+make -C /lib/modules/6.11.0-17-generic/build M=/home/osboxes/asop/aso/practica2 clean
+make[1]: Entering directory '/usr/src/linux-headers-6.11.0-17-generic'
+  CLEAN   /home/osboxes/asop/aso/practica2/Module.symvers
+make[1]: Leaving directory '/usr/src/linux-headers-6.11.0-17-generic'
+rm mkassoofs
+rm: cannot remove 'mkassoofs': No such file or directory
+make: *** [Makefile:13: clean] Error 1
+root@osboxes:/home/osboxes/asop/aso/practica2# ls
+assoofs.c  assoofs.h  fallos.txt  Makefile  mkassoofs.c
+root@osboxes:/home/osboxes/asop/aso/practica2# make
 make -C /lib/modules/6.11.0-17-generic/build M=/home/osboxes/asop/aso/practica2 modules
 make[1]: Entering directory '/usr/src/linux-headers-6.11.0-17-generic'
 warning: the compiler differs from the one used to build the kernel
   The kernel was built by: x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
   You are using:           gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
   CC [M]  /home/osboxes/asop/aso/practica2/assoofs.o
-/home/osboxes/asop/aso/practica2/assoofs.c: In function ‘assoofs_lookup’:
-/home/osboxes/asop/aso/practica2/assoofs.c:178:30: error: implicit declaration of function ‘mnt_idmap_owner’; did you mean ‘mnt_idmap_get’? [-Werror=implicit-function-declaration]
-  178 |             inode_init_owner(mnt_idmap_owner(sb),inode, parent_inode, ((struct assoofs_inode_info *)inode->i_private)->mode);
-      |                              ^~~~~~~~~~~~~~~
-      |                              mnt_idmap_get
-/home/osboxes/asop/aso/practica2/assoofs.c:178:30: warning: passing argument 1 of ‘inode_init_owner’ makes pointer from integer without a cast [-Wint-conversion]
-  178 |             inode_init_owner(mnt_idmap_owner(sb),inode, parent_inode, ((struct assoofs_inode_info *)inode->i_private)->mode);
-      |                              ^~~~~~~~~~~~~~~~~~~
-      |                              |
-      |                              int
+/home/osboxes/asop/aso/practica2/assoofs.c:164:37: error: expected ‘)’ before ‘struct’
+  164 | struct dentry *assoofs_lookup(idmap, struct dentry *child_dentry, unsigned int flags) {
+      |                                     ^~~~~~~
+      |                                     )
+/home/osboxes/asop/aso/practica2/assoofs.c: In function ‘assoofs_create’:
+/home/osboxes/asop/aso/practica2/assoofs.c:224:22: error: implicit declaration of function ‘mnt_idmap_owner’; did you mean ‘mnt_idmap_get’? [-Werror=implicit-function-declaration]
+  224 |     inode_init_owner(mnt_idmap_owner(sb), inode, dir, mode);
+      |                      ^~~~~~~~~~~~~~~
+      |                      mnt_idmap_get
+/home/osboxes/asop/aso/practica2/assoofs.c:224:22: warning: passing argument 1 of ‘inode_init_owner’ makes pointer from integer without a cast [-Wint-conversion]
+  224 |     inode_init_owner(mnt_idmap_owner(sb), inode, dir, mode);
+      |                      ^~~~~~~~~~~~~~~~~~~
+      |                      |
+      |                      int
 In file included from ./include/linux/compat.h:17,
                  from ./arch/x86/include/asm/ia32.h:7,
                  from ./arch/x86/include/asm/elf.h:10,
                  from ./include/linux/elf.h:6,
                  from ./include/linux/module.h:19,
                  from /home/osboxes/asop/aso/practica2/assoofs.c:1:
-./include/linux/fs.h:1945:41: note: expected ‘struct mnt_idmap *’ but argument is of type ‘int’
- 1945 | void inode_init_owner(struct mnt_idmap *idmap, struct inode *inode,
-      |                       ~~~~~~~~~~~~~~~~~~^~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c: In function ‘assoofs_create’:
-/home/osboxes/asop/aso/practica2/assoofs.c:224:22: warning: passing argument 1 of ‘inode_init_owner’ makes pointer from integer without a cast [-Wint-conversion]
-  224 |     inode_init_owner(mnt_idmap_owner(sb), inode, dir, mode);
-      |                      ^~~~~~~~~~~~~~~~~~~
-      |                      |
-      |                      int
 ./include/linux/fs.h:1945:41: note: expected ‘struct mnt_idmap *’ but argument is of type ‘int’
  1945 | void inode_init_owner(struct mnt_idmap *idmap, struct inode *inode,
       |                       ~~~~~~~~~~~~~~~~~~^~~~~
@@ -51,17 +56,11 @@ In file included from ./include/linux/compat.h:17,
 ./include/linux/fs.h:1945:41: note: expected ‘struct mnt_idmap *’ but argument is of type ‘int’
  1945 | void inode_init_owner(struct mnt_idmap *idmap, struct inode *inode,
       |                       ~~~~~~~~~~~~~~~~~~^~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c:491:41: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘declarada’
-  491 |     struct inode_operations previamente declarada
-      |                                         ^~~~~~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c:491:41: error: unknown type name ‘declarada’
-/home/osboxes/asop/aso/practica2/assoofs.c:492:15: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘->’ token
-  492 |     root_inode->i_fop = &assoofs_dir_operations;
-      |               ^~
 cc1: some warnings being treated as errors
 make[3]: *** [scripts/Makefile.build:244: /home/osboxes/asop/aso/practica2/assoofs.o] Error 1
 make[2]: *** [/usr/src/linux-headers-6.11.0-17-generic/Makefile:1931: /home/osboxes/asop/aso/practica2] Error 2
 make[1]: *** [Makefile:224: __sub-make] Error 2
 make[1]: Leaving directory '/usr/src/linux-headers-6.11.0-17-generic'
 make: *** [Makefile:6: ko] Error 2
+
 
