@@ -20,7 +20,16 @@ static int assoofs_create(struct mnt_idmap *idmap, struct inode *dir, struct den
 struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_dentry, unsigned int flags);
 static int assoofs_mkdir(struct mnt_idmap *idmap, struct inode *dir , struct dentry *dentry, umode_t mode); //MODIFICADO MIGRACION el primer argumento cambia
 static int assoofs_remove(struct inode *dir, struct dentry *dentry);
-
+static void assoofs_destroy_inode(struct inode *inode);
+void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *inode);
+int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *inode_info);
+void assoofs_save_sb_info(struct super_block *sb);
+struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64_t inode_no);
+struct inode *assoofs_get_inode(struct super_block *sb, uint64_t inode_no);
+int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *out);
+int assoofs_sb_get_a_freeinode(struct super_block *sb, uint64_t *out);
+int assoofs_sb_set_a_freeblock(struct super_block *sb, uint64_t block);
+int assoofs_sb_set_a_freeinode(struct super_block *sb, uint64_t inode);
 /*
  *  Estructuras de datos necesarias
  */
@@ -234,6 +243,44 @@ static int assoofs_create(struct mnt_idmap *idmap, struct inode *dir, struct den
     return 0;
 }
 
+struct assoofs_inode_info *assoofs_get_inode_info(struct super_block *sb, uint64_t inode_no) {
+    struct buffer_head *bh;
+    struct assoofs_inode_info *inode_info;
+    int i;
+    bh = sb_bread(sb, ASSOOFS_INODESTORE_BLOCK_NUMBER);
+    inode_info = (struct assoofs_inode_info *)bh->b_data;
+    for (i = 0; i < ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED; i++) {
+        if (inode_info->inode_no == inode_no) {
+            struct assoofs_inode_info *ret = kmem_cache_alloc(assoofs_inode_cache, GFP_KERNEL);
+            memcpy(ret, inode_info, sizeof(struct assoofs_inode_info));
+            brelse(bh);
+            return ret;
+        }
+        inode_info++;
+    }
+    brelse(bh);
+    return NULL;
+}
+
+struct inode *assoofs_get_inode(struct super_block *sb, uint64_t inode_no) {
+    struct inode *inode;
+    struct assoofs_inode_info *inode_info;
+    inode = new_inode(sb);
+    inode_info = assoofs_get_inode_info(sb, inode_no);
+    inode->i_ino = inode_no;
+    inode->i_sb = sb;
+    inode->i_op = &assoofs_inode_ops;
+    inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+    inode->i_private = inode_info;
+    if (S_ISDIR(inode_info->mode)) {
+        inode->i_fop = &assoofs_dir_operations;
+    } else {
+        inode->i_fop = &assoofs_file_operations;
+    }
+    inode->i_mode = inode_info->mode;
+    return inode;
+}
+
 static int assoofs_mkdir(struct mnt_idmap *idmap, struct inode *dir , struct dentry *dentry, umode_t mode) {
     struct inode *inode;
     struct assoofs_inode_info *inode_info;
@@ -292,6 +339,57 @@ static int assoofs_mkdir(struct mnt_idmap *idmap, struct inode *dir , struct den
     assoofs_save_inode_info(sb, parent_inode_info);
     return 0;
 
+}
+
+static void assoofs_destroy_inode(struct inode *inode) {
+    struct assoofs_inode_info *inode_info = inode->i_private;
+    kmem_cache_free(assoofs_inode_cache, inode_info);
+}
+
+void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *inode) {
+    struct buffer_head *bh;
+    struct assoofs_inode_info *inode_store;
+    struct assoofs_super_block_info *sb_info = sb->s_fs_info;
+    bh = sb_bread(sb, ASSOOFS_INODESTORE_BLOCK_NUMBER);
+    inode_store = (struct assoofs_inode_info *)bh->b_data;
+    inode_store += sb_info->inodes_count;
+    memcpy(inode_store, inode, sizeof(struct assoofs_inode_info));
+    mark_buffer_dirty(bh);
+    sync_dirty_buffer(bh);
+    brelse(bh);
+    if (inode->inode_no >= sb_info->inodes_count) {
+        sb_info->inodes_count = inode->inode_no + 1;
+        assoofs_save_sb_info(sb);
+    }
+}
+
+int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *inode_info) {
+    struct buffer_head *bh;
+    struct assoofs_inode_info *inode_store;
+    int i;
+    bh = sb_bread(sb, ASSOOFS_INODESTORE_BLOCK_NUMBER);
+    inode_store = (struct assoofs_inode_info *)bh->b_data;
+    for (i = 0; i < ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED; i++) {
+        if (inode_store->inode_no == inode_info->inode_no) {
+            memcpy(inode_store, inode_info, sizeof(struct assoofs_inode_info));
+            mark_buffer_dirty(bh);
+            sync_dirty_buffer(bh);
+            brelse(bh);
+            return 0;
+        }
+        inode_store++;
+    }
+    brelse(bh);
+    return -1;
+}
+
+void assoofs_save_sb_info(struct super_block *sb) {
+    struct buffer_head *bh;
+    bh = sb_bread(sb, ASSOOFS_SUPERBLOCK_BLOCK_NUMBER);
+    memcpy(bh->b_data, sb->s_fs_info, sizeof(struct assoofs_super_block_info));
+    mark_buffer_dirty(bh);
+    sync_dirty_buffer(bh);
+    brelse(bh);
 }
 
 static int assoofs_remove(struct inode *dir, struct dentry *dentry){
@@ -387,6 +485,51 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     sb->s_root = d_make_root(root_inode);
     return 0;
 }
+
+/* --- FUNCIONES DE GESTIÓN DE BLOQUES/INODOS LIBRES --- */
+
+int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *out) {
+    struct assoofs_super_block_info *sb_info = sb->s_fs_info;
+    int i;
+    for (i = ASSOOFS_LAST_RESERVED_BLOCK + 1; i < ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED; i++) {
+        if (!(sb_info->free_blocks & (1 << i))) {
+            *out = i;
+            sb_info->free_blocks |= (1 << i);
+            assoofs_save_sb_info(sb);
+            return 0;
+        }
+    }
+    return -1;
+}
+
+int assoofs_sb_get_a_freeinode(struct super_block *sb, uint64_t *out) {
+    struct assoofs_super_block_info *sb_info = sb->s_fs_info;
+    int i;
+    for (i = ASSOOFS_LAST_RESERVED_INODE + 1; i < ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED; i++) {
+        if (!(sb_info->free_inodes & (1 << i))) {
+            *out = i;
+            sb_info->free_inodes |= (1 << i);
+            assoofs_save_sb_info(sb);
+            return 0;
+        }
+    }
+    return -1;
+}
+
+int assoofs_sb_set_a_freeblock(struct super_block *sb, uint64_t block) {
+    struct assoofs_super_block_info *sb_info = sb->s_fs_info;
+    sb_info->free_blocks &= ~(1 << block);
+    assoofs_save_sb_info(sb);
+    return 0;
+}
+
+int assoofs_sb_set_a_freeinode(struct super_block *sb, uint64_t inode) {
+    struct assoofs_super_block_info *sb_info = sb->s_fs_info;
+    sb_info->free_inodes &= ~(1 << inode);
+    assoofs_save_sb_info(sb);
+    return 0;
+}
+
 
 /*
  *  Montaje de dispositivos assoofs
