@@ -84,8 +84,7 @@ ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t *
     bh = sb_bread(filp->f_path.dentry->d_inode->i_sb,
     inode_info->data_block_number);
     buffer = (char *)bh->b_data;
-    buffer+=*ppos; // Incrementamos el buffer para que lea a partir de donde se
-    quedo
+    buffer+=*ppos; // Incrementamos el buffer para que lea a partir de donde se quedo
     nbytes = min((size_t) inode_info->file_size - (size_t) *ppos, len); // Hay que comparar len con el tama~no del fichero menos los bytes leidos hasta el momento, por si llegamos al final del fichero
     if(copy_to_user(buf, buffer, nbytes) != 0 ){
     return -1;
