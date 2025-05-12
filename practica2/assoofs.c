@@ -161,7 +161,7 @@ static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
  *  Funciones que realizan operaciones sobre inodos
  */
 
-struct dentry *assoofs_lookup(idmap, struct dentry *child_dentry, unsigned int flags) {
+struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_dentry, unsigned int flags) {
     //1. Acceder al bloque de disco con el contenido del directorio apuntado por parent inode.
     struct assoofs_inode_info *parent_info = parent_inode->i_private;
     struct super_block *sb = parent_inode->i_sb;
@@ -174,9 +174,7 @@ struct dentry *assoofs_lookup(idmap, struct dentry *child_dentry, unsigned int f
     record = (struct assoofs_dir_record_entry *)bh->b_data;
     for (i=0; i < parent_info->dir_children_count; i++) {
         if ((!strcmp(record->filename, child_dentry->d_name.name)) && record->entry_removed == ASSOOFS_FALSE) {
-            struct inode *inode = assoofs_get_inode(sb, record->inode_no);
-            inode_init_owner(mnt_idmap_owner(sb),inode, parent_inode, ((struct assoofs_inode_info *)inode->i_private)->mode);
-            d_add(child_dentry, inode);
+            struct inode *inode = assoofs_get_inode(sb, record->inode_no);            d_add(child_dentry, inode);
             return NULL;
     }
     record++;
@@ -221,7 +219,7 @@ static int assoofs_create(struct mnt_idmap *idmap, struct inode *dir, struct den
     inode_info->file_size = 0;
     inode->i_private = inode_info;
     inode->i_fop=&assoofs_file_operations;
-    inode_init_owner(mnt_idmap_owner(sb), inode, dir, mode);
+    inode_init_owner(idmap, inode, dir, mode);
     d_add(dentry, inode);
     assoofs_sb_get_a_freeblock(sb, &inode_info->data_block_number);
     assoofs_add_inode_info(sb, inode_info);
@@ -328,7 +326,7 @@ static int assoofs_mkdir(struct mnt_idmap *idmap, struct inode *dir , struct den
     inode_info->dir_children_count = 0;
     inode->i_private = inode_info;
     inode->i_fop=&assoofs_dir_operations;
-    inode_init_owner(mnt_idmap_owner(sb), inode, dir, inode_info->mode);
+    inode_init_owner(idmap, inode, dir, inode_info->mode);
     d_add(dentry, inode);
     assoofs_sb_get_a_freeblock(sb, &inode_info->data_block_number);
     assoofs_add_inode_info(sb, inode_info);
@@ -484,10 +482,11 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     inode_info = kmem_cache_alloc(assoofs_inode_cache, GFP_KERNEL);
     mutex_unlock(&assoofs_cach_lock);
     root_inode = new_inode(sb);
-    inode_init_owner(mnt_idmap_owner(sb), root_inode, NULL, S_IFDIR);
+    inode_init_owner(idmap, root_inode, NULL, S_IFDIR);
     root_inode->i_ino = ASSOOFS_ROOTDIR_INODE_NUMBER; // número de inodo
     root_inode->i_sb = sb; // puntero al superbloque
-    root_inode->i_op = &assoofs_inode_ops; // dirección de una variable de tipo struct inode_operations previamente declarada
+    root_inode->i_op = &assoofs_inode_ops; // dirección de una variable de tipo
+// Comentario eliminado: línea inválida
     root_inode->i_fop = &assoofs_dir_operations;
     /* dirección de una variable de tipo
     struct file_operations previamente declarada. En la práctica tenemos 2:
