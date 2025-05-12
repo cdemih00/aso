@@ -30,6 +30,9 @@ int assoofs_sb_get_a_freeblock(struct super_block *sb, uint64_t *out);
 int assoofs_sb_get_a_freeinode(struct super_block *sb, uint64_t *out);
 int assoofs_sb_set_a_freeblock(struct super_block *sb, uint64_t block);
 int assoofs_sb_set_a_freeinode(struct super_block *sb, uint64_t inode);
+static struct kmem_cache *assoofs_inode_cache;
+static DEFINE_MUTEX(assoofs_sb_lock);
+static DEFINE_MUTEX(assoofs_cach_lock);
 /*
  *  Estructuras de datos necesarias
  */
@@ -63,7 +66,7 @@ static struct inode_operations assoofs_inode_ops = {
 };
 // Operaciones sobre el superbloque
 static const struct super_operations assoofs_sops = {
-    .drop_inode = generic_delete_inode,
+    .drop_inode = assoofs_destroy_inode,
 };
 
 
@@ -194,15 +197,13 @@ static int assoofs_create(struct mnt_idmap *idmap, struct inode *dir, struct den
     uint64_t count;
     printk(KERN_INFO "New file request\n");
     sb = dir->i_sb; // obtengo un puntero al superbloque desde dir
-    count = ((struct assoofs_super_block_info *)sb->s_fs_info)->inodes_count; //
-    obtengo el número de inodos de la información persistente del superbloque
+    count = ((struct assoofs_super_block_info *)sb->s_fs_info)->inodes_count; //obtengo el número de inodos de la información persistente del superbloque
     inode = new_inode(sb);
     inode->i_sb = sb;
     inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
     inode->i_op = &assoofs_inode_ops;
     assoofs_sb_get_a_freeinode(sb, &inode->i_ino);
-    //Compruebo que el valor de count no es superior al número máximo de objetos
-    soportados
+    //Compruebo que el valor de count no es superior al número máximo de objetos soportados
     if(count > ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED){
     return -1;
     }
@@ -341,9 +342,10 @@ static int assoofs_mkdir(struct mnt_idmap *idmap, struct inode *dir , struct den
 
 }
 
-static void assoofs_destroy_inode(struct inode *inode) {
+static int assoofs_destroy_inode(struct inode *inode) {
     struct assoofs_inode_info *inode_info = inode->i_private;
     kmem_cache_free(assoofs_inode_cache, inode_info);
+    return 0;
 }
 
 void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *inode) {
@@ -440,8 +442,7 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
 
     printk(KERN_INFO "assoofs_fill_super request\n");
     // 1.- Leer la información persistente del superbloque del dispositivo de bloques
-    bh = sb_bread(sb, ASSOOFS_SUPERBLOCK_BLOCK_NUMBER); // sb lo recibe
-    assoofs_fill_super como argumento
+    bh = sb_bread(sb, ASSOOFS_SUPERBLOCK_BLOCK_NUMBER); // sb lo recibe assoofs_fill_super como argumento
     assoofs_sb = (struct assoofs_super_block_info *)bh->b_data;
     brelse(bh);
   
