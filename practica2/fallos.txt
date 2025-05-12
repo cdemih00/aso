@@ -1,167 +1,63 @@
-root@osboxes:/home/osboxes/asop/aso/practica2# make
+oot@osboxes:/home/osboxes/asop/aso/practica2# make
 make -C /lib/modules/6.11.0-17-generic/build M=/home/osboxes/asop/aso/practica2 modules
 make[1]: Entering directory '/usr/src/linux-headers-6.11.0-17-generic'
 warning: the compiler differs from the one used to build the kernel
   The kernel was built by: x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
   You are using:           gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
   CC [M]  /home/osboxes/asop/aso/practica2/assoofs.o
-/home/osboxes/asop/aso/practica2/assoofs.c:69:19: error: initialization of ‘int (*)(struct inode *)’ from incompatible pointer type ‘void (*)(struct inode *)’ [-Werror=incompatible-pointer-types]
-   69 |     .drop_inode = assoofs_destroy_inode,
-      |                   ^~~~~~~~~~~~~~~~~~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c:69:19: note: (near initialization for ‘assoofs_sops.drop_inode’)
 /home/osboxes/asop/aso/practica2/assoofs.c: In function ‘assoofs_lookup’:
-/home/osboxes/asop/aso/practica2/assoofs.c:178:32: error: passing argument 1 of ‘inode_init_owner’ from incompatible pointer type [-Werror=incompatible-pointer-types]
-  178 |             inode_init_owner(sb->s_user_ns,inode, parent_inode, ((struct assoofs_inode_info *)inode->i_private)->mode);
-      |                              ~~^~~~~~~~~~~
-      |                                |
-      |                                struct user_namespace *
+/home/osboxes/asop/aso/practica2/assoofs.c:178:30: error: implicit declaration of function ‘mnt_idmap_owner’; did you mean ‘mnt_idmap_get’? [-Werror=implicit-function-declaration]
+  178 |             inode_init_owner(mnt_idmap_owner(sb),inode, parent_inode, ((struct assoofs_inode_info *)inode->i_private)->mode);
+      |                              ^~~~~~~~~~~~~~~
+      |                              mnt_idmap_get
+/home/osboxes/asop/aso/practica2/assoofs.c:178:30: warning: passing argument 1 of ‘inode_init_owner’ makes pointer from integer without a cast [-Wint-conversion]
+  178 |             inode_init_owner(mnt_idmap_owner(sb),inode, parent_inode, ((struct assoofs_inode_info *)inode->i_private)->mode);
+      |                              ^~~~~~~~~~~~~~~~~~~
+      |                              |
+      |                              int
 In file included from ./include/linux/compat.h:17,
                  from ./arch/x86/include/asm/ia32.h:7,
                  from ./arch/x86/include/asm/elf.h:10,
                  from ./include/linux/elf.h:6,
                  from ./include/linux/module.h:19,
                  from /home/osboxes/asop/aso/practica2/assoofs.c:1:
-./include/linux/fs.h:1945:41: note: expected ‘struct mnt_idmap *’ but argument is of type ‘struct user_namespace *’
+./include/linux/fs.h:1945:41: note: expected ‘struct mnt_idmap *’ but argument is of type ‘int’
  1945 | void inode_init_owner(struct mnt_idmap *idmap, struct inode *inode,
       |                       ~~~~~~~~~~~~~~~~~~^~~~~
 /home/osboxes/asop/aso/practica2/assoofs.c: In function ‘assoofs_create’:
-/home/osboxes/asop/aso/practica2/assoofs.c:202:10: error: ‘struct inode’ has no member named ‘i_atime’
-  202 |     inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-      |          ^~
-/home/osboxes/asop/aso/practica2/assoofs.c:202:27: error: ‘struct inode’ has no member named ‘i_mtime’
-  202 |     inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-      |                           ^~
-/home/osboxes/asop/aso/practica2/assoofs.c:202:44: error: ‘struct inode’ has no member named ‘i_ctime’
-  202 |     inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-      |                                            ^~
-/home/osboxes/asop/aso/practica2/assoofs.c:204:36: error: passing argument 2 of ‘assoofs_sb_get_a_freeinode’ from incompatible pointer type [-Werror=incompatible-pointer-types]
-  204 |     assoofs_sb_get_a_freeinode(sb, &inode->i_ino);
-      |                                    ^~~~~~~~~~~~~
-      |                                    |
-      |                                    long unsigned int *
-/home/osboxes/asop/aso/practica2/assoofs.c:30:66: note: expected ‘uint64_t *’ {aka ‘long long unsigned int *’} but argument is of type ‘long unsigned int *’
-   30 | int assoofs_sb_get_a_freeinode(struct super_block *sb, uint64_t *out);
-      |                                                        ~~~~~~~~~~^~~
-/home/osboxes/asop/aso/practica2/assoofs.c:219:22: error: implicit declaration of function ‘mnt_idmap_owner’; did you mean ‘mnt_idmap_get’? [-Werror=implicit-function-declaration]
-  219 |     inode_init_owner(mnt_idmap_owner(sb), inode, dir, mode);
-      |                      ^~~~~~~~~~~~~~~
-      |                      mnt_idmap_get
-/home/osboxes/asop/aso/practica2/assoofs.c:219:22: warning: passing argument 1 of ‘inode_init_owner’ makes pointer from integer without a cast [-Wint-conversion]
-  219 |     inode_init_owner(mnt_idmap_owner(sb), inode, dir, mode);
+/home/osboxes/asop/aso/practica2/assoofs.c:224:22: warning: passing argument 1 of ‘inode_init_owner’ makes pointer from integer without a cast [-Wint-conversion]
+  224 |     inode_init_owner(mnt_idmap_owner(sb), inode, dir, mode);
       |                      ^~~~~~~~~~~~~~~~~~~
       |                      |
       |                      int
 ./include/linux/fs.h:1945:41: note: expected ‘struct mnt_idmap *’ but argument is of type ‘int’
  1945 | void inode_init_owner(struct mnt_idmap *idmap, struct inode *inode,
       |                       ~~~~~~~~~~~~~~~~~~^~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c:228:5: error: unknown type name ‘informaci´on’
-  228 |     informaci´on persistente del inodo creado en el paso 2.
-      |     ^~~~~~~~~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c:228:30: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘del’
-  228 |     informaci´on persistente del inodo creado en el paso 2.
-      |                              ^~~
-/home/osboxes/asop/aso/practica2/assoofs.c: In function ‘assoofs_get_inode’:
-/home/osboxes/asop/aso/practica2/assoofs.c:273:10: error: ‘struct inode’ has no member named ‘i_atime’
-  273 |     inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-      |          ^~
-/home/osboxes/asop/aso/practica2/assoofs.c:273:27: error: ‘struct inode’ has no member named ‘i_mtime’
-  273 |     inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-      |                           ^~
-/home/osboxes/asop/aso/practica2/assoofs.c:273:44: error: ‘struct inode’ has no member named ‘i_ctime’
-  273 |     inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-      |                                            ^~
 /home/osboxes/asop/aso/practica2/assoofs.c: In function ‘assoofs_mkdir’:
-/home/osboxes/asop/aso/practica2/assoofs.c:295:5: error: unknown type name ‘obtengo’
-  295 |     obtengo el número de inodos de la información persistente del superbloque
-      |     ^~~~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c:295:16: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘número’
-  295 |     obtengo el número de inodos de la información persistente del superbloque
-      |                ^~~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c:298:10: error: ‘struct inode’ has no member named ‘i_atime’
-  298 |     inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-      |          ^~
-/home/osboxes/asop/aso/practica2/assoofs.c:298:27: error: ‘struct inode’ has no member named ‘i_mtime’
-  298 |     inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-      |                           ^~
-/home/osboxes/asop/aso/practica2/assoofs.c:298:44: error: ‘struct inode’ has no member named ‘i_ctime’
-  298 |     inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-      |                                            ^~
-/home/osboxes/asop/aso/practica2/assoofs.c:300:36: error: passing argument 2 of ‘assoofs_sb_get_a_freeinode’ from incompatible pointer type [-Werror=incompatible-pointer-types]
-  300 |     assoofs_sb_get_a_freeinode(sb, &inode->i_ino);
-      |                                    ^~~~~~~~~~~~~
-      |                                    |
-      |                                    long unsigned int *
-/home/osboxes/asop/aso/practica2/assoofs.c:30:66: note: expected ‘uint64_t *’ {aka ‘long long unsigned int *’} but argument is of type ‘long unsigned int *’
-   30 | int assoofs_sb_get_a_freeinode(struct super_block *sb, uint64_t *out);
-      |                                                        ~~~~~~~~~~^~~
-/home/osboxes/asop/aso/practica2/assoofs.c:302:5: error: ‘soportados’ undeclared (first use in this function)
-  302 |     soportados
-      |     ^~~~~~~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c:302:5: note: each undeclared identifier is reported only once for each function it appears in
-/home/osboxes/asop/aso/practica2/assoofs.c:302:15: error: expected ‘;’ before ‘if’
-  302 |     soportados
-      |               ^
-      |               ;
-  303 |     if(count > ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED){
-      |     ~~         
-/home/osboxes/asop/aso/practica2/assoofs.c:316:24: error: passing argument 1 of ‘inode_init_owner’ from incompatible pointer type [-Werror=incompatible-pointer-types]
-  316 |     inode_init_owner(sb->s_user_ns, inode, dir, inode_info->mode);
-      |                      ~~^~~~~~~~~~~
-      |                        |
-      |                        struct user_namespace *
-./include/linux/fs.h:1945:41: note: expected ‘struct mnt_idmap *’ but argument is of type ‘struct user_namespace *’
+/home/osboxes/asop/aso/practica2/assoofs.c:331:22: warning: passing argument 1 of ‘inode_init_owner’ makes pointer from integer without a cast [-Wint-conversion]
+  331 |     inode_init_owner(mnt_idmap_owner(sb), inode, dir, inode_info->mode);
+      |                      ^~~~~~~~~~~~~~~~~~~
+      |                      |
+      |                      int
+./include/linux/fs.h:1945:41: note: expected ‘struct mnt_idmap *’ but argument is of type ‘int’
  1945 | void inode_init_owner(struct mnt_idmap *idmap, struct inode *inode,
       |                       ~~~~~~~~~~~~~~~~~~^~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c:325:5: error: unknown type name ‘informaci´on’
-  325 |     informaci´on persistente del inodo creado en el paso 2.
-      |     ^~~~~~~~~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c:325:30: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘del’
-  325 |     informaci´on persistente del inodo creado en el paso 2.
-      |                              ^~~
-/home/osboxes/asop/aso/practica2/assoofs.c: At top level:
-/home/osboxes/asop/aso/practica2/assoofs.c:344:12: error: conflicting types for ‘assoofs_destroy_inode’; have ‘int(struct inode *)’
-  344 | static int assoofs_destroy_inode(struct inode *inode) {
-      |            ^~~~~~~~~~~~~~~~~~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c:23:13: note: previous declaration of ‘assoofs_destroy_inode’ with type ‘void(struct inode *)’
-   23 | static void assoofs_destroy_inode(struct inode *inode);
-      |             ^~~~~~~~~~~~~~~~~~~~~
 /home/osboxes/asop/aso/practica2/assoofs.c: In function ‘assoofs_fill_super’:
-/home/osboxes/asop/aso/practica2/assoofs.c:470:24: error: passing argument 1 of ‘inode_init_owner’ from incompatible pointer type [-Werror=incompatible-pointer-types]
-  470 |     inode_init_owner(sb->s_user_ns, root_inode, NULL, S_IFDIR);
-      |                      ~~^~~~~~~~~~~
-      |                        |
-      |                        struct user_namespace *
-./include/linux/fs.h:1945:41: note: expected ‘struct mnt_idmap *’ but argument is of type ‘struct user_namespace *’
+/home/osboxes/asop/aso/practica2/assoofs.c:487:22: warning: passing argument 1 of ‘inode_init_owner’ makes pointer from integer without a cast [-Wint-conversion]
+  487 |     inode_init_owner(mnt_idmap_owner(sb), root_inode, NULL, S_IFDIR);
+      |                      ^~~~~~~~~~~~~~~~~~~
+      |                      |
+      |                      int
+./include/linux/fs.h:1945:41: note: expected ‘struct mnt_idmap *’ but argument is of type ‘int’
  1945 | void inode_init_owner(struct mnt_idmap *idmap, struct inode *inode,
       |                       ~~~~~~~~~~~~~~~~~~^~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c:474:41: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘declarada’
-  474 |     struct inode_operations previamente declarada
+/home/osboxes/asop/aso/practica2/assoofs.c:491:41: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘declarada’
+  491 |     struct inode_operations previamente declarada
       |                                         ^~~~~~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c:474:41: error: unknown type name ‘declarada’
-/home/osboxes/asop/aso/practica2/assoofs.c:475:15: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘->’ token
-  475 |     root_inode->i_fop = &assoofs_dir_operations;
+/home/osboxes/asop/aso/practica2/assoofs.c:491:41: error: unknown type name ‘declarada’
+/home/osboxes/asop/aso/practica2/assoofs.c:492:15: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘->’ token
+  492 |     root_inode->i_fop = &assoofs_dir_operations;
       |               ^~
-/home/osboxes/asop/aso/practica2/assoofs.c:481:15: error: ‘struct inode’ has no member named ‘i_atime’
-  481 |     root_inode->i_atime = root_inode->i_mtime = root_inode->i_ctime =
-      |               ^~
-/home/osboxes/asop/aso/practica2/assoofs.c:481:37: error: ‘struct inode’ has no member named ‘i_mtime’
-  481 |     root_inode->i_atime = root_inode->i_mtime = root_inode->i_ctime =
-      |                                     ^~
-/home/osboxes/asop/aso/practica2/assoofs.c:481:59: error: ‘struct inode’ has no member named ‘i_ctime’
-  481 |     root_inode->i_atime = root_inode->i_mtime = root_inode->i_ctime =
-      |                                                           ^~
-/home/osboxes/asop/aso/practica2/assoofs.c: In function ‘assoofs_init’:
-/home/osboxes/asop/aso/practica2/assoofs.c:552:126: error: ‘SLAB_MEM_SPREAD’ undeclared (first use in this function)
-  552 | ,sizeof(struct assoofs_inode_info), 0,(SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD), NULL);
-      |                                                             ^~~~~~~~~~~~~~~
-
-/home/osboxes/asop/aso/practica2/assoofs.c: At top level:
-/home/osboxes/asop/aso/practica2/assoofs.c:23:13: warning: ‘assoofs_destroy_inode’ used but never defined
-   23 | static void assoofs_destroy_inode(struct inode *inode);
-      |             ^~~~~~~~~~~~~~~~~~~~~
-/home/osboxes/asop/aso/practica2/assoofs.c:344:12: warning: ‘assoofs_destroy_inode’ defined but not used [-Wunused-function]
-  344 | static int assoofs_destroy_inode(struct inode *inode) {
-      |            ^~~~~~~~~~~~~~~~~~~~~
 cc1: some warnings being treated as errors
 make[3]: *** [scripts/Makefile.build:244: /home/osboxes/asop/aso/practica2/assoofs.o] Error 1
 make[2]: *** [/usr/src/linux-headers-6.11.0-17-generic/Makefile:1931: /home/osboxes/asop/aso/practica2] Error 2
