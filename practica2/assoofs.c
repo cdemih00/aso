@@ -63,13 +63,58 @@ static const struct super_operations assoofs_sops = {
  */
 
 ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t * ppos) {
+    struct assoofs_inode_info *inode_info = filp->f_path.dentry->d_inode->i_private;
+    struct buffer_head *bh;
+    char *buffer;
+    int nbytes;
     printk(KERN_INFO "Read request\n");
-    return 0;
+    if (*ppos >= inode_info->file_size) return 0;
+    bh = sb_bread(filp->f_path.dentry->d_inode->i_sb,
+    inode_info->data_block_number);
+    buffer = (char *)bh->b_data;
+    buffer+=*ppos; // Incrementamos el buffer para que lea a partir de donde se
+    quedo
+    nbytes = min((size_t) inode_info->file_size - (size_t) *ppos, len); // Hay que
+    comparar len con el tama~no del fichero menos los bytes leidos hasta el
+    momento, por si llegamos al final del fichero
+    if(copy_to_user(buf, buffer, nbytes) != 0 ){
+    return -1;
+    }
+    *ppos += nbytes;
+    return nbytes;
 }
 
 ssize_t assoofs_write(struct file * filp, const char __user * buf, size_t len, loff_t * ppos) {
+    struct assoofs_inode_info *inode_info = filp->f_path.dentry->d_inode->i_private;
+    struct buffer_head *bh;
+    struct super_block *sb;
+    char *buffer;
     printk(KERN_INFO "Write request\n");
-    return 0;
+    if (*ppos + len>= ASSOOFS_DEFAULT_BLOCK_SIZE){
+    printk(KERN_ERR "No hay suficiente espacio en el disco para escribir.\n");
+    return -ENOSPC;
+    }
+    sb = filp->f_path.dentry->d_inode->i_sb;
+    bh = sb_bread(sb, inode_info->data_block_number);
+    buffer = (char *)bh->b_data;
+    buffer += *ppos;
+    if(copy_from_user(buffer, buf, len) != 0) {
+    return -1;
+    }
+    *ppos+=len;
+    if(mutex_lock_interruptible(&assoofs_sb_lock) != 0){
+    panic("Error");
+    }
+    mark_buffer_dirty(bh);
+    mutex_unlock(&assoofs_sb_lock);
+    if(mutex_lock_interruptible(&assoofs_sb_lock) != 0){
+    panic("Error");
+    }
+    sync_dirty_buffer(bh);
+    mutex_unlock(&assoofs_sb_lock);
+    inode_info->file_size = *ppos;
+    assoofs_save_inode_info(sb, inode_info);
+    return len;
 }
 
 /*
@@ -77,43 +122,277 @@ ssize_t assoofs_write(struct file * filp, const char __user * buf, size_t len, l
  */
 
 static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
+    struct inode *inode;
+    struct super_block *sb;
+    struct assoofs_inode_info *inode_info;
+    struct buffer_head *bh;
+    struct assoofs_dir_record_entry *record;
+    int i;
     printk(KERN_INFO "Iterate request\n");
+    inode = filp->f_path.dentry->d_inode;
+    sb = inode->i_sb;
+    inode_info = inode->i_private;
+    if (ctx->pos) return 0;
+    if ((!S_ISDIR(inode_info->mode))) return -1;
+    bh = sb_bread(sb, inode_info->data_block_number);
+    record = (struct assoofs_dir_record_entry *)bh->b_data;
+    for (i = 0; i < inode_info->dir_children_count; i++) {
+    if(record->entry_removed == ASSOOFS_FALSE){
+    dir_emit(ctx, record->filename, ASSOOFS_FILENAME_MAXLEN,
+    record->inode_no, DT_UNKNOWN);
+    ctx->pos += sizeof(struct assoofs_dir_record_entry);
+    }
+    record++;
+    }
+    brelse(bh);
     return 0;
 }
 
 /*
  *  Funciones que realizan operaciones sobre inodos
  */
+ static struct inode_operations assoofs_inode_ops = {
+    .create = assoofs_create,
+    .lookup = assoofs_lookup,
+    .mkdir = assoofs_mkdir,
+    .unlink = assoofs_remove,
+};
+
 struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_dentry, unsigned int flags) {
+    //1. Acceder al bloque de disco con el contenido del directorio apuntado por parent inode.
+    struct assoofs_inode_info *parent_info = parent_inode->i_private;
+    struct super_block *sb = parent_inode->i_sb;
+    struct buffer_head *bh;
+    struct assoofs_dir_record_entry *record;
+    int i;
     printk(KERN_INFO "Lookup request\n");
+    bh = sb_bread(sb, parent_info->data_block_number);
+    //2. Recorrer el contenido del directorio buscando la entrada cuyo nombre se corresponda con el que buscamos. Si se localiza la entrada, entonces tenemos que construir el inodo correspondiente.
+    record = (struct assoofs_dir_record_entry *)bh->b_data;
+    for (i=0; i < parent_info->dir_children_count; i++) {
+        if ((!strcmp(record->filename, child_dentry->d_name.name)) && record->entry_removed == ASSOOFS_FALSE) {
+            struct inode *inode = assoofs_get_inode(sb, record->inode_no);
+            inode_init_owner(sb->s_user_ns,inode, parent_inode, ((struct assoofs_inode_info *)inode->i_private)->mode);
+            d_add(child_dentry, inode);
+            return NULL;
+    }
+    record++;
+    }
+    //3. En nuestro caso, la función debe devolver NULL, incluso cuando no se encuentre la entrada.
     return NULL;
 }
 
 
 static int assoofs_create(struct mnt_idmap *idmap, struct inode *dir, struct dentry *dentry, umode_t mode, bool excl) {
+    struct inode *inode;
+    struct assoofs_inode_info *inode_info;
+    struct assoofs_inode_info *parent_inode_info;
+    struct assoofs_dir_record_entry *dir_contents;
+    struct buffer_head *bh;
+    struct super_block *sb;
+    uint64_t count;
     printk(KERN_INFO "New file request\n");
+    sb = dir->i_sb; // obtengo un puntero al superbloque desde dir
+    count = ((struct assoofs_super_block_info *)sb->s_fs_info)->inodes_count; //
+    obtengo el número de inodos de la información persistente del superbloque
+    inode = new_inode(sb);
+    inode->i_sb = sb;
+    inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+    inode->i_op = &assoofs_inode_ops;
+    assoofs_sb_get_a_freeinode(sb, &inode->i_ino);
+    //Compruebo que el valor de count no es superior al número máximo de objetos
+    soportados
+    if(count > ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED){
+    return -1;
+    }
+    if(mutex_lock_interruptible(&assoofs_cach_lock) != 0){
+        panic("Error");
+    }
+    inode_info = kmem_cache_alloc(assoofs_inode_cache, GFP_KERNEL);
+    mutex_unlock(&assoofs_cach_lock);
+    inode_info->inode_no = inode->i_ino;
+    inode_info->mode = mode; // El segundo mode me llega como argumento
+    inode_info->file_size = 0;
+    inode->i_private = inode_info;
+    inode->i_fop=&assoofs_file_operations;
+    inode_init_owner(sb->s_user_ns, inode, dir, mode);
+    d_add(dentry, inode);
+    assoofs_sb_get_a_freeblock(sb, &inode_info->data_block_number);
+    assoofs_add_inode_info(sb, inode_info);
+    parent_inode_info = dir->i_private;
+    bh = sb_bread(sb, parent_inode_info->data_block_number);
+    dir_contents = (struct assoofs_dir_record_entry *)bh->b_data;
+    dir_contents += parent_inode_info->dir_children_count;
+    dir_contents->inode_no = inode_info->inode_no; // inode_info es la
+    informaci´on persistente del inodo creado en el paso 2.
+    strcpy(dir_contents->filename, dentry->d_name.name);
+    if(mutex_lock_interruptible(&assoofs_sb_lock) != 0){
+        panic("Error");
+    }
+    mark_buffer_dirty(bh);
+    mutex_unlock(&assoofs_sb_lock);
+    if(mutex_lock_interruptible(&assoofs_sb_lock) != 0){
+        panic("Error");
+    }
+    sync_dirty_buffer(bh);
+    mutex_unlock(&assoofs_sb_lock);
+    brelse(bh);
+    parent_inode_info->dir_children_count++;
+    assoofs_save_inode_info(sb, parent_inode_info);
     return 0;
 }
 
 static int assoofs_mkdir(struct mnt_idmap *idmap, struct inode *dir , struct dentry *dentry, umode_t mode) {
+    struct inode *inode;
+    struct assoofs_inode_info *inode_info;
+    struct assoofs_inode_info *parent_inode_info;
+    struct assoofs_dir_record_entry *dir_contents;
+    struct buffer_head *bh;
+    struct super_block *sb;
+    uint64_t count;
     printk(KERN_INFO "New directory request\n");
+    sb = dir->i_sb; // obtengo un puntero al superbloque desde dir
+    count = ((struct assoofs_super_block_info *)sb->s_fs_info)->inodes_count; //
+    obtengo el número de inodos de la información persistente del superbloque
+    inode = new_inode(sb);
+    inode->i_sb = sb;
+    inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+    inode->i_op = &assoofs_inode_ops;
+    assoofs_sb_get_a_freeinode(sb, &inode->i_ino);
+    //Compruebo que el valor de count no es superior al número máximo de objetos
+    soportados
+    if(count > ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED){
+    return -1;
+    }
+    if(mutex_lock_interruptible(&assoofs_cach_lock) != 0){
+    panic("Error");
+    }
+    inode_info = kmem_cache_alloc(assoofs_inode_cache, GFP_KERNEL);
+    mutex_unlock(&assoofs_cach_lock);
+    inode_info->inode_no = inode->i_ino;
+    inode_info->mode = S_IFDIR | mode;
+    inode_info->dir_children_count = 0;
+    inode->i_private = inode_info;
+    inode->i_fop=&assoofs_dir_operations;
+    inode_init_owner(sb->s_user_ns, inode, dir, inode_info->mode);
+    d_add(dentry, inode);
+    assoofs_sb_get_a_freeblock(sb, &inode_info->data_block_number);
+    assoofs_add_inode_info(sb, inode_info);
+    parent_inode_info = dir->i_private;
+    bh = sb_bread(sb, parent_inode_info->data_block_number);
+    dir_contents = (struct assoofs_dir_record_entry *)bh->b_data;
+    dir_contents += parent_inode_info->dir_children_count;
+    dir_contents->inode_no = inode_info->inode_no; // inode_info es la
+    informaci´on persistente del inodo creado en el paso 2.
+    strcpy(dir_contents->filename, dentry->d_name.name);
+    if(mutex_lock_interruptible(&assoofs_sb_lock) != 0){
+        panic("Error");
+    }
+    mark_buffer_dirty(bh);
+    mutex_unlock(&assoofs_sb_lock);
+    if(mutex_lock_interruptible(&assoofs_sb_lock) != 0){
+        panic("Error");
+    }
+    sync_dirty_buffer(bh);
+    mutex_unlock(&assoofs_sb_lock);
+    brelse(bh);
+    parent_inode_info->dir_children_count++;
+    assoofs_save_inode_info(sb, parent_inode_info);
     return 0;
+
 }
 
 static int assoofs_remove(struct inode *dir, struct dentry *dentry){
+    struct super_block *sb = dir->i_sb;
+    struct buffer_head *bh;
+    struct assoofs_dir_record_entry *dir_contents;
+    int i;
+    struct inode *inode_remove = dentry->d_inode;
+    struct assoofs_inode_info *inode_info_remove = inode_remove->i_private;
+    struct assoofs_inode_info *parent_inode_info = dir->i_private;
     printk(KERN_INFO "assoofs_remove request\n");
+    bh = sb_bread(sb, parent_inode_info->data_block_number);
+    dir_contents = (struct assoofs_dir_record_entry*)bh->b_data;
+    for(i = 0; i<parent_inode_info->dir_children_count; i++){
+        if (!strcmp(dir_contents->filename, dentry->d_name.name) &&
+            dir_contents->inode_no == inode_remove->i_ino){
+            printk(KERN_INFO "Found dir_record_entry to remove: %s\n",
+            dir_contents->filename);
+            dir_contents->entry_removed = ASSOOFS_TRUE;
+            break;
+            }
+        dir_contents++;
+    }
+    if(mutex_lock_interruptible(&assoofs_sb_lock) != 0){
+        return -1;
+    }
+    mark_buffer_dirty(bh);
+    mutex_unlock(&assoofs_sb_lock);
+    if(mutex_lock_interruptible(&assoofs_sb_lock) != 0){
+        return -1;
+    }
+    sync_dirty_buffer(bh);
+    mutex_unlock(&assoofs_sb_lock);
+    brelse(bh);
+    assoofs_sb_set_a_freeinode(sb, inode_info_remove->inode_no);
+    assoofs_sb_set_a_freeblock(sb, inode_info_remove->data_block_number);
     return 0;
 }
 
 /*
  *  Inicialización del superbloque
  */
-int assoofs_fill_super(struct super_block *sb, void *data, int silent) {   
+int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
+    struct buffer_head *bh;
+    struct assoofs_super_block_info *assoofs_sb;
+    struct inode *root_inode;
+    struct assoofs_inode_info *inode_info;
+
     printk(KERN_INFO "assoofs_fill_super request\n");
-    // 1.- Leer la información persistente del superbloque del dispositivo de bloques  
+    // 1.- Leer la información persistente del superbloque del dispositivo de bloques
+    bh = sb_bread(sb, ASSOOFS_SUPERBLOCK_BLOCK_NUMBER); // sb lo recibe
+    assoofs_fill_super como argumento
+    assoofs_sb = (struct assoofs_super_block_info *)bh->b_data;
+    brelse(bh);
+  
     // 2.- Comprobar los parámetros del superbloque
-    // 3.- Escribir la información persistente leída del dispositivo de bloques en el superbloque sb, incluído el campo s_op con las operaciones que soporta.
+    if (assoofs_sb->magic != ASSOOFS_MAGIC){
+    return -1;
+    }
+    if (assoofs_sb->block_size != ASSOOFS_DEFAULT_BLOCK_SIZE){
+    return -1;
+    }
+
+
+    // 3.- Escribir la información persistente leída del dispositivo de bloques en el superbloque sb, incluido el campo s_op con las operaciones que soporta.
+    sb->s_magic = ASSOOFS_MAGIC;
+    sb->s_maxbytes = ASSOOFS_DEFAULT_BLOCK_SIZE;
+    sb->s_op = &assoofs_sops;
+    sb->s_fs_info = assoofs_sb;
+
     // 4.- Crear el inodo raíz y asignarle operaciones sobre inodos (i_op) y sobre directorios (i_fop)
+    if(mutex_lock_interruptible(&assoofs_cach_lock) != 0){
+    panic("Error");
+    }
+    inode_info = kmem_cache_alloc(assoofs_inode_cache, GFP_KERNEL);
+    mutex_unlock(&assoofs_cach_lock);
+    root_inode = new_inode(sb);
+    inode_init_owner(sb->s_user_ns, root_inode, NULL, S_IFDIR);
+    root_inode->i_ino = ASSOOFS_ROOTDIR_INODE_NUMBER; // número de inodo
+    root_inode->i_sb = sb; // puntero al superbloque
+    root_inode->i_op = &assoofs_inode_ops; // dirección de una variable de tipo
+    struct inode_operations previamente declarada
+    root_inode->i_fop = &assoofs_dir_operations;
+    /* dirección de una variable de tipo
+    struct file_operations previamente declarada. En la práctica tenemos 2:
+    assoofs_dir_operations y assoofs_file_operations. La primera la utilizaremos
+    cuando creemos inodos para directorios (como el directorio raiz) y la segunda
+    cuando creemos inodos para ficheros.*/
+    root_inode->i_atime = root_inode->i_mtime = root_inode->i_ctime =
+    current_time(root_inode); // fechas.
+    root_inode->i_private = assoofs_get_inode_info(sb,
+    ASSOOFS_ROOTDIR_INODE_NUMBER); // Información persistente del inodo
+    sb->s_root = d_make_root(root_inode);
     return 0;
 }
 
@@ -135,6 +414,8 @@ static int __init assoofs_init(void) {
     printk(KERN_INFO "assoofs_init request\n");
     ret = register_filesystem(&assoofs_type);
     // Control de errores a partir del valor de retorno
+    assoofs_inode_cache = kmem_cache_create("assoofs_inode_cache",sizeof(struct assoofs_inode_info), 0,(SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD), NULL);
+
     return ret;
 }
 
@@ -143,6 +424,7 @@ static void __exit assoofs_exit(void) {
     printk(KERN_INFO "assoofs_exit request\n");
     ret = unregister_filesystem(&assoofs_type);
     // Control de errores a partir del valor de retorno
+    kmem_cache_destroy(assoofs_inode_cache);
 }
 
 module_init(assoofs_init);
