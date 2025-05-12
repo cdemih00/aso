@@ -74,9 +74,7 @@ ssize_t assoofs_read(struct file * filp, char __user * buf, size_t len, loff_t *
     buffer = (char *)bh->b_data;
     buffer+=*ppos; // Incrementamos el buffer para que lea a partir de donde se
     quedo
-    nbytes = min((size_t) inode_info->file_size - (size_t) *ppos, len); // Hay que
-    comparar len con el tama~no del fichero menos los bytes leidos hasta el
-    momento, por si llegamos al final del fichero
+    nbytes = min((size_t) inode_info->file_size - (size_t) *ppos, len); // Hay que comparar len con el tama~no del fichero menos los bytes leidos hasta el momento, por si llegamos al final del fichero
     if(copy_to_user(buf, buffer, nbytes) != 0 ){
     return -1;
     }
@@ -151,12 +149,6 @@ static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
 /*
  *  Funciones que realizan operaciones sobre inodos
  */
- static struct inode_operations assoofs_inode_ops = {
-    .create = assoofs_create,
-    .lookup = assoofs_lookup,
-    .mkdir = assoofs_mkdir,
-    .unlink = assoofs_remove,
-};
 
 struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_dentry, unsigned int flags) {
     //1. Acceder al bloque de disco con el contenido del directorio apuntado por parent inode.
@@ -215,7 +207,7 @@ static int assoofs_create(struct mnt_idmap *idmap, struct inode *dir, struct den
     inode_info->file_size = 0;
     inode->i_private = inode_info;
     inode->i_fop=&assoofs_file_operations;
-    inode_init_owner(sb->s_user_ns, inode, dir, mode);
+    inode_init_owner(mnt_idmap_owner(sb), inode, dir, mode);
     d_add(dentry, inode);
     assoofs_sb_get_a_freeblock(sb, &inode_info->data_block_number);
     assoofs_add_inode_info(sb, inode_info);

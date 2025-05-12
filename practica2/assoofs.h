@@ -38,3 +38,4 @@ struct assoofs_inode_info {
         uint64_t dir_children_count;  
     };
 };
+
