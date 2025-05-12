@@ -1,4 +1,4 @@
-#include <linux/module.h>       /* Needed by all modules */
+include <linux/module.h>       /* Needed by all modules */
 #include <linux/kernel.h>       /* Needed for KERN_INFO  */
 #include <linux/init.h>         /* Needed for the macros */
 #include <linux/fs.h>           /* libfs stuff           */
@@ -482,7 +482,7 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     inode_info = kmem_cache_alloc(assoofs_inode_cache, GFP_KERNEL);
     mutex_unlock(&assoofs_cach_lock);
     root_inode = new_inode(sb);
-    inode_init_owner(idmap, root_inode, NULL, S_IFDIR);
+    inode_init_owner(&nop_mnt_idmap, root_inode, NULL, S_IFDIR);
     root_inode->i_ino = ASSOOFS_ROOTDIR_INODE_NUMBER; // número de inodo
     root_inode->i_sb = sb; // puntero al superbloque
     root_inode->i_op = &assoofs_inode_ops; // dirección de una variable de tipo
