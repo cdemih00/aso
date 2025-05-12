@@ -161,7 +161,7 @@ static int assoofs_iterate(struct file *filp, struct dir_context *ctx) {
  *  Funciones que realizan operaciones sobre inodos
  */
 
-struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_dentry, unsigned int flags) {
+struct dentry *assoofs_lookup(idmap, struct dentry *child_dentry, unsigned int flags) {
     //1. Acceder al bloque de disco con el contenido del directorio apuntado por parent inode.
     struct assoofs_inode_info *parent_info = parent_inode->i_private;
     struct super_block *sb = parent_inode->i_sb;
@@ -487,8 +487,7 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     inode_init_owner(mnt_idmap_owner(sb), root_inode, NULL, S_IFDIR);
     root_inode->i_ino = ASSOOFS_ROOTDIR_INODE_NUMBER; // número de inodo
     root_inode->i_sb = sb; // puntero al superbloque
-    root_inode->i_op = &assoofs_inode_ops; // dirección de una variable de tipo
-    struct inode_operations previamente declarada
+    root_inode->i_op = &assoofs_inode_ops; // dirección de una variable de tipo struct inode_operations previamente declarada
     root_inode->i_fop = &assoofs_dir_operations;
     /* dirección de una variable de tipo
     struct file_operations previamente declarada. En la práctica tenemos 2:
