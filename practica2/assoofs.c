@@ -20,7 +20,7 @@ static int assoofs_create(struct mnt_idmap *idmap, struct inode *dir, struct den
 struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_dentry, unsigned int flags);
 static int assoofs_mkdir(struct mnt_idmap *idmap, struct inode *dir , struct dentry *dentry, umode_t mode); //MODIFICADO MIGRACION el primer argumento cambia
 static int assoofs_remove(struct inode *dir, struct dentry *dentry);
-static void assoofs_destroy_inode(struct inode *inode);
+static int assoofs_destroy_inode(struct inode *inode);
 void assoofs_add_inode_info(struct super_block *sb, struct assoofs_inode_info *inode);
 int assoofs_save_inode_info(struct super_block *sb, struct assoofs_inode_info *inode_info);
 void assoofs_save_sb_info(struct super_block *sb);
@@ -175,7 +175,7 @@ struct dentry *assoofs_lookup(struct inode *parent_inode, struct dentry *child_d
     for (i=0; i < parent_info->dir_children_count; i++) {
         if ((!strcmp(record->filename, child_dentry->d_name.name)) && record->entry_removed == ASSOOFS_FALSE) {
             struct inode *inode = assoofs_get_inode(sb, record->inode_no);
-            inode_init_owner(sb->s_user_ns,inode, parent_inode, ((struct assoofs_inode_info *)inode->i_private)->mode);
+            inode_init_owner(mnt_idmap_owner(sb),inode, parent_inode, ((struct assoofs_inode_info *)inode->i_private)->mode);
             d_add(child_dentry, inode);
             return NULL;
     }
@@ -199,9 +199,14 @@ static int assoofs_create(struct mnt_idmap *idmap, struct inode *dir, struct den
     count = ((struct assoofs_super_block_info *)sb->s_fs_info)->inodes_count; //obtengo el número de inodos de la información persistente del superbloque
     inode = new_inode(sb);
     inode->i_sb = sb;
-    inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+    {
+    struct timespec64 ts = current_time(inode);
+    inode_set_ctime(inode, ts.tv_sec, ts.tv_nsec);
+    inode_set_mtime(inode, ts.tv_sec, ts.tv_nsec);
+    inode_set_atime(inode, ts.tv_sec, ts.tv_nsec);
+    }
     inode->i_op = &assoofs_inode_ops;
-    assoofs_sb_get_a_freeinode(sb, &inode->i_ino);
+    assoofs_sb_get_a_freeinode(sb, (uint64_t *)&inode->i_ino);
     //Compruebo que el valor de count no es superior al número máximo de objetos soportados
     if(count > ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED){
     return -1;
@@ -225,7 +230,7 @@ static int assoofs_create(struct mnt_idmap *idmap, struct inode *dir, struct den
     dir_contents = (struct assoofs_dir_record_entry *)bh->b_data;
     dir_contents += parent_inode_info->dir_children_count;
     dir_contents->inode_no = inode_info->inode_no; // inode_info es la
-    informaci´on persistente del inodo creado en el paso 2.
+//     informaci´on persistente del inodo creado en el paso 2.
     strcpy(dir_contents->filename, dentry->d_name.name);
     if(mutex_lock_interruptible(&assoofs_sb_lock) != 0){
         panic("Error");
@@ -270,7 +275,12 @@ struct inode *assoofs_get_inode(struct super_block *sb, uint64_t inode_no) {
     inode->i_ino = inode_no;
     inode->i_sb = sb;
     inode->i_op = &assoofs_inode_ops;
-    inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+    {
+    struct timespec64 ts = current_time(inode);
+    inode_set_ctime(inode, ts.tv_sec, ts.tv_nsec);
+    inode_set_mtime(inode, ts.tv_sec, ts.tv_nsec);
+    inode_set_atime(inode, ts.tv_sec, ts.tv_nsec);
+    }
     inode->i_private = inode_info;
     if (S_ISDIR(inode_info->mode)) {
         inode->i_fop = &assoofs_dir_operations;
@@ -292,14 +302,19 @@ static int assoofs_mkdir(struct mnt_idmap *idmap, struct inode *dir , struct den
     printk(KERN_INFO "New directory request\n");
     sb = dir->i_sb; // obtengo un puntero al superbloque desde dir
     count = ((struct assoofs_super_block_info *)sb->s_fs_info)->inodes_count; //
-    obtengo el número de inodos de la información persistente del superbloque
+//     obtengo el número de inodos de la información persistente del superbloque
     inode = new_inode(sb);
     inode->i_sb = sb;
-    inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
+    {
+    struct timespec64 ts = current_time(inode);
+    inode_set_ctime(inode, ts.tv_sec, ts.tv_nsec);
+    inode_set_mtime(inode, ts.tv_sec, ts.tv_nsec);
+    inode_set_atime(inode, ts.tv_sec, ts.tv_nsec);
+    }
     inode->i_op = &assoofs_inode_ops;
-    assoofs_sb_get_a_freeinode(sb, &inode->i_ino);
+    assoofs_sb_get_a_freeinode(sb, (uint64_t *)&inode->i_ino);
     //Compruebo que el valor de count no es superior al número máximo de objetos
-    soportados
+//     soportados
     if(count > ASSOOFS_MAX_FILESYSTEM_OBJECTS_SUPPORTED){
     return -1;
     }
@@ -313,7 +328,7 @@ static int assoofs_mkdir(struct mnt_idmap *idmap, struct inode *dir , struct den
     inode_info->dir_children_count = 0;
     inode->i_private = inode_info;
     inode->i_fop=&assoofs_dir_operations;
-    inode_init_owner(sb->s_user_ns, inode, dir, inode_info->mode);
+    inode_init_owner(mnt_idmap_owner(sb), inode, dir, inode_info->mode);
     d_add(dentry, inode);
     assoofs_sb_get_a_freeblock(sb, &inode_info->data_block_number);
     assoofs_add_inode_info(sb, inode_info);
@@ -322,7 +337,7 @@ static int assoofs_mkdir(struct mnt_idmap *idmap, struct inode *dir , struct den
     dir_contents = (struct assoofs_dir_record_entry *)bh->b_data;
     dir_contents += parent_inode_info->dir_children_count;
     dir_contents->inode_no = inode_info->inode_no; // inode_info es la
-    informaci´on persistente del inodo creado en el paso 2.
+//     informaci´on persistente del inodo creado en el paso 2.
     strcpy(dir_contents->filename, dentry->d_name.name);
     if(mutex_lock_interruptible(&assoofs_sb_lock) != 0){
         panic("Error");
@@ -344,6 +359,8 @@ static int assoofs_mkdir(struct mnt_idmap *idmap, struct inode *dir , struct den
 static int assoofs_destroy_inode(struct inode *inode) {
     struct assoofs_inode_info *inode_info = inode->i_private;
     kmem_cache_free(assoofs_inode_cache, inode_info);
+    return 0;
+
     return 0;
 }
 
@@ -467,7 +484,7 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     inode_info = kmem_cache_alloc(assoofs_inode_cache, GFP_KERNEL);
     mutex_unlock(&assoofs_cach_lock);
     root_inode = new_inode(sb);
-    inode_init_owner(sb->s_user_ns, root_inode, NULL, S_IFDIR);
+    inode_init_owner(mnt_idmap_owner(sb), root_inode, NULL, S_IFDIR);
     root_inode->i_ino = ASSOOFS_ROOTDIR_INODE_NUMBER; // número de inodo
     root_inode->i_sb = sb; // puntero al superbloque
     root_inode->i_op = &assoofs_inode_ops; // dirección de una variable de tipo
@@ -478,8 +495,12 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent) {
     assoofs_dir_operations y assoofs_file_operations. La primera la utilizaremos
     cuando creemos inodos para directorios (como el directorio raiz) y la segunda
     cuando creemos inodos para ficheros.*/
-    root_inode->i_atime = root_inode->i_mtime = root_inode->i_ctime =
-    current_time(root_inode); // fechas.
+    {
+    struct timespec64 ts = current_time(root_inode);
+    inode_set_ctime(root_inode, ts.tv_sec, ts.tv_nsec);
+    inode_set_mtime(root_inode, ts.tv_sec, ts.tv_nsec);
+    inode_set_atime(root_inode, ts.tv_sec, ts.tv_nsec);
+    } // fechas.
     root_inode->i_private = assoofs_get_inode_info(sb,
     ASSOOFS_ROOTDIR_INODE_NUMBER); // Información persistente del inodo
     sb->s_root = d_make_root(root_inode);
@@ -549,7 +570,7 @@ static int __init assoofs_init(void) {
     printk(KERN_INFO "assoofs_init request\n");
     ret = register_filesystem(&assoofs_type);
     // Control de errores a partir del valor de retorno
-    assoofs_inode_cache = kmem_cache_create("assoofs_inode_cache",sizeof(struct assoofs_inode_info), 0,(SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD), NULL);
+    assoofs_inode_cache = kmem_cache_create("assoofs_inode_cache",sizeof(struct assoofs_inode_info), 0,(SLAB_RECLAIM_ACCOUNT), NULL);
 
     return ret;
 }
